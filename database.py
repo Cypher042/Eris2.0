@@ -9,6 +9,7 @@ class Database:
         client = MongoClient(MONGO_URI)
         db = client['db']
         self.users = db['users']
+        self.flag = "heybond"
 
     def isUserPresent(self, uid):
         return self.users.find_one({"_id":uid})
@@ -28,16 +29,23 @@ class Database:
         except:
             return -1
     
-    def get_flag(self, interaction: Interaction, flag: str):
-        return None if self.currentcotd is None else self.currentcotd.flag
+    def get_flag(self):
+        return self.flag
     
     def check_repeated_submit(self, interaction: Interaction):
         user = self.users.find_one({"_id":interaction.user.id})
+
+        if not self.isUserPresent(interaction.user.id):
+            self.register(interaction)
+
         if user.get["submitted"] is True:
             return 1
         else:
-            self.users.update_one({"_id":interaction.user.id}, {'$inc': {'points': 1}, '$set':{'submitted': True}})
+            self.users.update_one({"_id":interaction.user.id}, {'$set':{'submitted': True}})
             return 0
     
-    def scoreboard(self, interaction: Interaction):
+    def update_status(self):
+        self.users.update_many({}, {'$set': {'submitted': False}})
+
+    def scoreboard(self):
         return list(self.users.find({}, {"name": 1, "points": 1}))
