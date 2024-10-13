@@ -1,0 +1,15 @@
+services:
+  bot:
+    build: .
+    container_name: cotd
+    depends_on:
+      - db
+
+  db:
+    image: mongodb/mongodb-community-server:latest
+    container_name: mongodb
+    volumes:
+      - mongo-data:/data/db
+
+volumes:
+  mongo-data:
