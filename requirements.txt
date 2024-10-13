@@ -1,6 +1,5 @@
 nextcord
-docker
 pymongo
-python-dotenv
-apscheduler
 nextcord-ext-menus
+audioop-lts
+setuptools
