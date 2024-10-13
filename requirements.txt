@@ -3,3 +3,4 @@ pymongo
 nextcord-ext-menus
 audioop-lts
 setuptools
+python-dotenv

@@ -6,7 +6,11 @@ from typing import Dict, List, Optional
 from nextcord.ext.commands.errors import MissingAnyRole
 from nextcord.utils import escape_markdown
 from database import Database
+from dotenv import load_dotenv
+import os
 
+load_dotenv()
+TOKEN=os.getenv('TOKEN')
 intents = Intents.default()
 intents.message_content = True
 intents.members = True
