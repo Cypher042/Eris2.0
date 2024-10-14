@@ -10,21 +10,27 @@ class Database:
         client = MongoClient("mongodb://localhost:27017")
         db = client['db']
         self.users = db['users']
-        self.flag = open(".flag").read().strip()
-        self.hint = open(".hint").read().strip()
+        self.cotd = db['cotd']
+        try:
+            self.ongoing_cotd = self.cotd.find().sort("day", -1).limit(1)[0]
+        except IndexError:
+            self.ongoing_cotd = dict(day=-1, flag="", hint="")
+        self.day = self.ongoing_cotd.get("day")
+        self.flag = self.ongoing_cotd.get("flag")
+        self.hint = self.ongoing_cotd.get("hint")
+        if self.hint is None: self.hint = ""
+        if self.flag is None: self.flag = ""
+        if self.day is None: self.day = -1
 
     def isUserPresent(self, uid):
-        return self.users.find_one({"_id":uid})
+        return self.users.count_documents({"_id":uid})
 
     def getHint(self):
         return None if len(self.hint) == 0 else self.hint
 
     def updateHint(self, hint : str | None = None):
-        f = open(".hint", "w") 
-        hint = "" if hint is None else hint
-        f.write(hint)
-        f.close()
-        self.hint = hint
+        self.hint = "" if hint is None else hint
+        self.cotd.update_one({"day":self.day}, {"$set":{"hint": self.hint}})
 
     def register(self, interaction: Interaction):
         uid = interaction.user.id
@@ -33,7 +39,7 @@ class Database:
         try:
             presence = self.users.count_documents({"_id":uid}, limit=1)
             if presence == 0:
-                insert = dict(_id=uid, nick=nick, name=name, points=0, messages=list(), submitted=False)
+                insert = dict(_id=uid, nick=nick, name=name, points=0, messages=list())
                 self.users.insert_one(insert)
                 return 0
             else:
@@ -44,32 +50,35 @@ class Database:
     def get_flag(self):
         return self.flag
     
-    def check_repeated_submit(self, interaction: Interaction):
-        user = self.users.find_one({"_id":interaction.user.id})
+    # def check_repeated_submit(self, interaction: Interaction):
+    #     user = self.cotd.find_one({"day":self.day})
 
-        if not self.isUserPresent(interaction.user.id):
-            self.register(interaction)
+    #     if not self.isUserPresent(interaction.user.id):
+    #         self.register(interaction)
 
-        if user.get["submitted"] is True:
-            return 1
-        else:
-            self.users.update_one({"_id":interaction.user.id}, {'$set':{'submitted': True}})
-            return 0
+    #     if interaction.user.id in user.get("solves"):
+    #         return 1
+    #     else:
+    #         self.cotd.update_one({"day":self.day}, {'$push':{'messages': interaction.user.id}})
+    #         return 0
     
     def update_status(self):
-        self.users.update_many({}, {'$set': {'submitted': False}})
+        self.users.update_many({}, {'$set': {'messages': list()}})
 
     def scoreboard(self):
         return list(self.users.find({}, {"name": 1, "points": 1}))
     
     def add_message(self, interaction, messageid):
-        info = self.users.find_one({"_id":interaction.user.id})
-        if len(info["messages"]) > 3: 
-            return 1
-        temp = info["messages"] 
-        temp.append(messageid)
-        self.users.update_one({"_id":interaction.user.id}, {"$set":{"messages":temp}})
+        self.users.update_one({"_id":interaction.user.id}, {"$push":{"messages":messageid}})
         return 0
+
+    def add_cotd(self, flag):
+        self.day = self.day + 1
+        self.cotd.insert_one(dict(day=self.day, flag=flag, hint="", solves=list()))
+        self.flag = flag
+        self.hint = None
+        self.update_status()
+        return self.day
 
     def get_scoreboard(self):
         lst = list(self.users.find({}, {"_id":0, "name":1, "points":1}))
@@ -79,34 +88,29 @@ class Database:
 
     def update_flag(self, flag):
         self.flag = flag
-        f = open(".flag", "w")
-        f.write(flag)
-        f.close()
+        self.cotd.update_one({"day":self.day}, {"$set": {"flag":flag}})
+
+    def accept_response(self, uid):
+        if len(self.users.find_one({"_id":uid}).get("messages")) > 2: return 1
+        else : return 0
 
     def get_message_user(self, messageid):
-        lst = self.users.find()
-        for i in lst:
-            if messageid in i["messages"]:
-                return i["_id"], i["messages"]
-        return None, None
+        lst = self.users.find_one({"messages":{"$in":[messageid]}})
+        return lst.get("_id"), lst.get("messages")
     
     def increase_score(self, userid):
-        hasSubmitted = self.users.find_one({"_id":userid}, {"submitted":1})
-        if hasSubmitted["submitted"] is False:
-            self.users.update_one({"_id":userid}, {"$inc": {"points":1}, "$set":{"submitted":True}})
+        solves = self.cotd.find_one({"day" : self.day}).get("solves")
+        if userid not in solves:
+            self.cotd.update_one({"day": self.day}, {"$addToSet" : {"solves": userid}})
+            self.users.update_one({"_id":userid}, {"$inc": {"points":1}})
     
     def remove_message(self, userid, messageid):
-        lst = self.users.find_one({"_id":userid})
-        i = lst["messages"]
-        i.remove(messageid) if messageid in i else i
-        if i is None: i=list()
-        self.users.update_one({"_id":userid}, {"$set":{"messages": i}})
+        self.users.update_one({"_id":userid}, {"$pull":{"messages": messageid}})
 
     def submit_flag(self, interaction):
-        if not self.isUserPresent(interaction.user.id):
-            self.register(interaction)
-        info = self.users.find_one({"_id": interaction.user.id})
-        if info["submitted"] is True:
+
+        info = self.cotd.find_one({"day": self.day})
+        if interaction.user.id in info.get("solves"):
             return 1
         else:
             return 0
