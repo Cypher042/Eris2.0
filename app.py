@@ -26,32 +26,40 @@ class Response(nextcord.ui.View):
     @nextcord.ui.button(label="Approve", style=nextcord.ButtonStyle.green)
     async def approve(self, button: nextcord.ui.button, interaction: Interaction):
         await interaction.response.defer()
+        self.points_channel = await bot.fetch_channel(POINTS_CHANNEL_ID)
         isthere, messageids = database.get_message_user(interaction.message.id)
         if isthere:
             user = await bot.fetch_user(isthere)
             username = interaction.user.nick if interaction.user.nick is not None else interaction.user.name
-            await user.send(f"Approved! Your Proof Of Work was accepted by {username}.")
-            await interaction.followup.send(f"{interaction.user.mention} approved {user.mention} PoW.")
-            database.increase_score(isthere)
+            if database.submission_status(interaction.user.id) is False:
+                await user.send(f"Approved! Your Proof Of Work was accepted by {username}.")
+                await interaction.followup.send(f"{interaction.user.mention} approved {user.name} (uid: {user.id}) PoW.")
+                res = database.increase_score(isthere)
+                if res == 0:
+                    await self.points_channel.send(f"Added 1 point to {user.mention}.")
+            else:
+                await interaction.followup.send(f"{user.name} PoW already approved.")
             self.stop()
             for messageid in messageids:
                 try:
                     database.remove_message(isthere, messageid)
-                    message = await interaction.channel.fetch_message(messageid)
+                    message = interaction.channel.get_partial_message(messageid)
                     await message.delete()
-                except:
+                except Exception as e:
+                    print(str(e))
                     continue
     
     @nextcord.ui.button(label="Reject", style=nextcord.ButtonStyle.red)
     async def disapprove(self, button: nextcord.ui.Button, interaction:Interaction):
+        await interaction.response.defer()
         isthere, _ = database.get_message_user(interaction.message.id) 
         if isthere:
             user = await bot.fetch_user(isthere)
             await user.send(f"Oops! Your proof of work was rejected by {interaction.user.nick if interaction.user.nick is not None else interaction.user.name}!\nYou may DM him/her and sort things out!")
-            await interaction.response.send_message(f"{interaction.user.mention} rejected {user.mention} PoW.")
+            await interaction.followup.send(f"{interaction.user.mention} rejected {user.mention} PoW.")
         database.remove_message(isthere, interaction.message.id)
         message = interaction.message.id
-        message = await interaction.channel.fetch_message(message)
+        message = interaction.channel.get_partial_message(message)
         self.stop()
         await message.delete()
             
@@ -111,7 +119,7 @@ class ScoreBoarder(menus.ListPageSource):
             else:
                 desc+="\n╠"+"═"*14+"╬"+"═"*20+"╣"
             score, name = entry.split()
-            desc += "\n║"+name[0:14]+" "*(14-len(name))+"║"+"  "+score+" "*(17)+"║"
+            desc += "\n║"+name[0:14]+" "*(14-len(name))+"║"+"  "+score+" "*(18-len(score))+"║"
         desc += "\n╚"+"═"*14+"╩"+"═"*20+"╝"
         desc += "\n```"
         embed=Embed(title="Here you go!", description=desc, color=nextcord.Color.gold())
@@ -164,11 +172,10 @@ async def setFlag(ctx, flag : str | None = None):
     if flag is None:
         return await ctx.send(f"Cannot update new flag to None.")
     else:
-        await ctx.send(f"This action will reset everyone submission status to False and update the current flag.")
         database.updateHint()
         database.update_status()
         database.update_flag(flag)
-        await ctx.send(f"Action completed. Ready to accept new flags!")
+        await ctx.send(f"Updated flag to {flag}")
 
 @_set.command(name="ephemeral")
 @commands.has_any_role(*ADMIN_ROLES)
@@ -181,7 +188,7 @@ async def ephemeral(ctx, action : str | None = None):
             await ctx.send("Ephemeral messages are already off.")
         else:
             toggleEphemeral()
-            await ctx.send("Ephemeral messages are now on.")
+            await ctx.send("Ephemeral messages are now off.")
     elif action == "on":
         if EPHEMERAL is True:
             await ctx.send("Ephemeral messages are already on.")
@@ -208,6 +215,17 @@ async def hint(interaction : Interaction):
     else:
         await interaction.response.send_message(embed=Embed(title="Hint!", description=hint), ephemeral=EPHEMERAL)
 
+@bot.slash_command(name="register", description="Register yourself for COTD!", guild_ids=GID)
+async def register(interaction: Interaction):
+    await interaction.response.defer()
+    result = database.register(interaction)
+    if result == 0:
+        await interaction.followup.send(embed=REGISTERED_SUCCESSFULLY_EMBED)
+    elif result == 1:
+        await interaction.followup.send(embed=ALREADY_REGISTERED_EMBED)
+    else:
+        await interaction.followup.send(embed=REGISTRATION_FAILURE_EMBED)
+
 @bot.command(name="flag")
 @commands.has_any_role(*ADMIN_ROLES)
 async def flag(ctx):
@@ -222,6 +240,48 @@ async def flag(ctx, flag : str = None):
         challday = database.add_cotd(flag)
         await ctx.send(f"Added cotd{challday} with flag {flag}.")
 
+@bot.slash_command(name="add", description="Add point to a user.", guild_ids=GID)
+@commands.has_any_role(*ADMIN_ROLES)
+async def add(interaction: Interaction, user: nextcord.Member, points: int = None):
+    await interaction.response.defer()
+    isPresent = database.isUserPresent(user.id)
+    if points is None:
+        if isPresent:
+            await interaction.followup.send(f"User already present.")
+        else:
+            database._register(user)
+            await interaction.followup.send(f"Added **{user.mention}** to scoreboard.")
+    else:
+        points = int(points)
+        if points <= 0:
+            await interaction.followup.send(f"Points to be added should be more than 0.")
+        elif points is not None:
+            database.add(user, int(points))
+            await interaction.followup.send(f"Added {points} points to **{user.mention}**.")
+
+@bot.slash_command(name="subtract", description="Subtract point of a user.", guild_ids=GID)
+@commands.has_any_role(*ADMIN_ROLES)
+async def subtract(interaction: Interaction, user: nextcord.Member, points: int):
+    points = int(points)
+    if points <= 0:
+        await interaction.response.send_message(f"Points to be deducted should be greater than 0.", ephemeral=True)
+    else:
+        database.sub(user.id, int(points))
+        await interaction.response.send_message(f"Subtracted {points} points of **{user.mention}**.")
+
+@bot.slash_command(name="show", description="Get the points of a user.", guild_ids=GID)
+@commands.has_any_role(*ADMIN_ROLES)
+async def show(interaction: Interaction, user: nextcord.Member):
+    score = database.show(user.id)
+    if score is None:
+        await interaction.response.send_message(f"No such user added yet.")
+    else:
+        await interaction.response.send_message(f"{user.mention} has a score of {str(score)}.")
+
+@bot.slash_command(name="ping", description="Check Bot Latency.", guild_ids=GID)
+async def ping(interaction:Interaction):
+    await interaction.response.send_message(f"Pong! In {round(bot.latency*1000)}ms.", ephemeral=EPHEMERAL)
+
 @bot.event
 async def on_ready():
     print("I am ready")
@@ -229,7 +289,6 @@ async def on_ready():
 @bot.event
 async def on_command_error(ctx, error):
     if isinstance(error, MissingAnyRole):
-        await ctx.send(embed=RESTRICTED_EMBED)
-        
+        await ctx.send(embed=RESTRICTED_EMBED) 
 if __name__ == "__main__":
     bot.run(TOKEN)

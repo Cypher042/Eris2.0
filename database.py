@@ -2,6 +2,7 @@ from pymongo import MongoClient
 from config import *
 from nextcord import Interaction, Embed
 from json import loads
+from datetime import datetime
 import os
 
 class Database:
@@ -39,7 +40,7 @@ class Database:
         try:
             presence = self.users.count_documents({"_id":uid}, limit=1)
             if presence == 0:
-                insert = dict(_id=uid, nick=nick, name=name, points=0, messages=list())
+                insert = dict(_id=uid, nick=nick, name=name, points=0, messages=list(), latest_solve=datetime.now())
                 self.users.insert_one(insert)
                 return 0
             else:
@@ -47,26 +48,30 @@ class Database:
         except:
             return -1
     
+    def _register(self, user):
+        uid = user.id
+        nick = user.nick
+        name = user.name
+        try:
+            presence = self.users.count_documents({"_id":uid}, limit=1)
+            if presence == 0:
+                insert = dict(_id=uid, nick=nick, name=name, points=0, messages=list(), latest_solve=datetime.now())
+                self.users.insert_one(insert)
+                return 0
+            else:
+                return 1
+        except:
+            return -1
     def get_flag(self):
         return self.flag
-    
-    # def check_repeated_submit(self, interaction: Interaction):
-    #     user = self.cotd.find_one({"day":self.day})
-
-    #     if not self.isUserPresent(interaction.user.id):
-    #         self.register(interaction)
-
-    #     if interaction.user.id in user.get("solves"):
-    #         return 1
-    #     else:
-    #         self.cotd.update_one({"day":self.day}, {'$push':{'messages': interaction.user.id}})
-    #         return 0
     
     def update_status(self):
         self.users.update_many({}, {'$set': {'messages': list()}})
 
-    def scoreboard(self):
-        return list(self.users.find({}, {"name": 1, "points": 1}))
+    def get_scoreboard(self):
+        lst = list(self.users.find({}, {"name": 1, "points": 1, "latest_solve" : 1}).sort([("points", -1), ("latest_solve", 1)]))
+        lst = [str(i["points"]) + " " + i["name"] for i in lst]
+        return lst
     
     def add_message(self, interaction, messageid):
         self.users.update_one({"_id":interaction.user.id}, {"$push":{"messages":messageid}})
@@ -79,12 +84,6 @@ class Database:
         self.hint = None
         self.update_status()
         return self.day
-
-    def get_scoreboard(self):
-        lst = list(self.users.find({}, {"_id":0, "name":1, "points":1}))
-        lst = [str(i["points"]) + " " + i["name"] for i in lst]
-        lst = sorted(lst)
-        return lst[::-1]
 
     def update_flag(self, flag):
         self.flag = flag
@@ -102,8 +101,25 @@ class Database:
         solves = self.cotd.find_one({"day" : self.day}).get("solves")
         if userid not in solves:
             self.cotd.update_one({"day": self.day}, {"$addToSet" : {"solves": userid}})
-            self.users.update_one({"_id":userid}, {"$inc": {"points":1}})
+            self.users.update_one({"_id":userid}, {"$inc": {"points":1}, "$set": {"latest_solve":datetime.now()}})
+            return 0
+        return 1
     
+    def add(self, user, points : int):
+        if self.users.count_documents({"_id":user.id}) == 0:
+            self._register(user)
+        self.users.update_one({"_id":user.id}, {"$inc":{"points":points}})
+    
+    def sub(self, uid, points: int):
+        points = -points
+        self.users.update_one({"_id":uid}, {"$inc":{"points": points}})
+    
+    def show(self, uid):
+        return self.users.find_one({"_id":uid}).get("points")
+
+    def submission_status(self, userid):
+        return True if userid in self.cotd.find_one({"day": self.day}).get("solves") else False
+
     def remove_message(self, userid, messageid):
         self.users.update_one({"_id":userid}, {"$pull":{"messages": messageid}})
 

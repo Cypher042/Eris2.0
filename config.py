@@ -18,3 +18,4 @@ EXCESS_VALIDATION_EMBED=Embed(title="Update!", description="You have already sen
 SENT_FOR_VAILDATION_EMBED=Embed(title="Update!", description="Sent for validation, you will be notified in DM.")
 CORRECT_FLAG_CHANNEL_ID=1294879357139030016
 WRONG_FLAG_CHANNEL_ID=11294879357139030016
+POINTS_CHANNEL_ID=1293621207060582411
