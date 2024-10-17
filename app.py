@@ -83,8 +83,8 @@ class Modal(nextcord.ui.Modal):
             style=nextcord.TextInputStyle.paragraph
         )    
         
-        self.add_item(self.main_desc)
         self.add_item(self.main_title)
+        self.add_item(self.main_desc)
     
     async def callback(self, interaction: Interaction):
         await interaction.response.defer()
