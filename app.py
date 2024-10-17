@@ -19,6 +19,13 @@ database = Database()
 
 bot = commands.Bot(command_prefix=COMMAND_PREFIX, intents=intents)
 
+async def checkUser(interaction:Interaction) -> bool:
+    userroles = interaction.user.roles
+    for role in userroles:
+        if role.id in ADMIN_ROLES:
+            return True
+    return False
+
 class Response(nextcord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -56,7 +63,7 @@ class Response(nextcord.ui.View):
         if isthere:
             user = await bot.fetch_user(isthere)
             await user.send(f"Oops! Your proof of work was rejected by {interaction.user.nick if interaction.user.nick is not None else interaction.user.name}!\nYou may DM him/her and sort things out!")
-            await interaction.followup.send(f"{interaction.user.mention} rejected {user.mention} PoW.")
+            await interaction.followup.send(f"{interaction.user.mention} rejected {user.name} PoW.")
         database.remove_message(isthere, interaction.message.id)
         message = interaction.message.id
         message = interaction.channel.get_partial_message(message)
@@ -153,8 +160,10 @@ async def submit_flag(interaction: Interaction, flag:str):
             await interaction.response.send_modal(modal=modal)
 
 @bot.slash_command(name="scoreboard", description="COTD Scoreboard!", guild_ids=GID)
-@commands.has_any_role(*ADMIN_ROLES)
 async def scoreboard(interaction: Interaction):
+    check = await checkUser(interaction)
+    if check is False:
+        return await interaction.response.send_message(embed=RESTRICTED_EMBED)
     await interaction.response.defer()
     scoreboard_list = database.get_scoreboard()
     pages = menus.ButtonMenuPages(source=ScoreBoarder(scoreboard_list))
@@ -241,8 +250,12 @@ async def flag(ctx, flag : str = None):
         await ctx.send(f"Added cotd{challday} with flag {flag}.")
 
 @bot.slash_command(name="add", description="Add point to a user.", guild_ids=GID)
-@commands.has_any_role(*ADMIN_ROLES)
 async def add(interaction: Interaction, user: nextcord.Member, points: int = None):
+
+    check = await checkUser(interaction)
+    if check is False:
+        return await interaction.response.send_message(embed=RESTRICTED_EMBED)
+
     await interaction.response.defer()
     isPresent = database.isUserPresent(user.id)
     if points is None:
@@ -253,6 +266,8 @@ async def add(interaction: Interaction, user: nextcord.Member, points: int = Non
             await interaction.followup.send(f"Added **{user.mention}** to scoreboard.")
     else:
         points = int(points)
+        if not isPresent:
+            database._register(user)
         if points <= 0:
             await interaction.followup.send(f"Points to be added should be more than 0.")
         elif points is not None:
@@ -260,8 +275,11 @@ async def add(interaction: Interaction, user: nextcord.Member, points: int = Non
             await interaction.followup.send(f"Added {points} points to **{user.mention}**.")
 
 @bot.slash_command(name="subtract", description="Subtract point of a user.", guild_ids=GID)
-@commands.has_any_role(*ADMIN_ROLES)
 async def subtract(interaction: Interaction, user: nextcord.Member, points: int):
+    check = await checkUser(interaction)
+    if check is False:
+        return await interaction.response.send_message(embed=RESTRICTED_EMBED)
+
     points = int(points)
     if points <= 0:
         await interaction.response.send_message(f"Points to be deducted should be greater than 0.", ephemeral=True)
@@ -272,6 +290,10 @@ async def subtract(interaction: Interaction, user: nextcord.Member, points: int)
 @bot.slash_command(name="show", description="Get the points of a user.", guild_ids=GID)
 @commands.has_any_role(*ADMIN_ROLES)
 async def show(interaction: Interaction, user: nextcord.Member):
+    check = await checkUser(interaction)
+    if check is False:
+        return await interaction.response.send_message(embed=RESTRICTED_EMBED)
+
     score = database.show(user.id)
     if score is None:
         await interaction.response.send_message(f"No such user added yet.")
