@@ -32,17 +32,22 @@ Modify the `config.py` accordingly:
 ```config.py  
 DISCORD_TOKEN=your-discord-bot-token  
 MONGO_URI=mongodb://mongo:27017/flagdb  
-PREFIX=!  
 ```  
 
 ### 3. Run with Docker Compose  
 Build and start the bot along with its MongoDB instance using Docker Compose:  
 ```bash  
 docker-compose up --build  
-```  
-![bottom text](https://raw.githubusercontent.com/Cypher042/Eris2.0/refs/heads/main/Screenshot%202024-12-03%20125605.png?raw=true)
-A sample of an interactive embed.
+```
 
+---
+
+### Screenshots
+![bottom text](https://raw.githubusercontent.com/Cypher042/Eris2.0/refs/heads/main/Screenshot%202024-12-03%20125605.png?raw=true)
+
+A sample of the interactive embed.
+
+---
 
 ### Contributing  
 1. Fork the repository.  
