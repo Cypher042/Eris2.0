@@ -40,4 +40,20 @@ Build and start the bot along with its MongoDB instance using Docker Compose:
 ```bash  
 docker-compose up --build  
 ```  
-!(hi)[https://github.com/Cypher042/Eris2.0/blob/main/Screenshot%202024-12-03%20125605.png?raw=true]
+![bottom text](https://raw.githubusercontent.com/Cypher042/Eris2.0/refs/heads/main/Screenshot%202024-12-03%20125605.png?raw=true)
+A sample of an interactive embed.
+
+
+### Contributing  
+1. Fork the repository.  
+2. Create a new branch for your feature or fix.  
+3. Commit your changes.  
+4. Open a pull request.  
+
+---
+## 💬 Feedback  
+
+Encounter issues or have suggestions? Feel free to:  
+- Open an issue in this repository  
+- Contact me at cypher200501@gmail.com
+
