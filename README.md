@@ -45,7 +45,7 @@ docker-compose up --build
 ### Screenshots
 ![bottom text](https://raw.githubusercontent.com/Cypher042/Eris2.0/refs/heads/main/Screenshot%202024-12-03%20125605.png?raw=true)
 
-A sample of the interactive embed.
+A sample of the Proof of Work embed.
 
 ---
 
